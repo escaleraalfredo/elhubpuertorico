@@ -24,12 +24,24 @@ The app is at the scaffold stage: the stack is wired up, but product features (n
 | `src/app/map.tsx` / `map.web.tsx` | Map centred on Puerto Rico (18.2208, -66.5901). Web gets a placeholder because react-native-maps has no web support. |
 | `app.json` | Static config: bundle ID/package `com.elhubpuertorico.app`, scheme `elhubpuertorico`, and the location and notifications plugins |
 | `app.config.ts` | Extends `app.json` with build-time env values (Google Maps Android key) |
+| `supabase/migrations/` | Database schema. Never edit an applied migration; add a new timestamped file. |
 
 ## Environment
 
 - Copy `.env.example` to `.env`. `.env` is git-ignored.
 - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are inlined into the client bundle. Never add secrets such as the `service_role` key under an `EXPO_PUBLIC_` name.
 - `GOOGLE_MAPS_ANDROID_API_KEY` is optional and only read at build time by `app.config.ts`.
+
+## Database (Supabase)
+
+- PostGIS lives in the `extensions` schema. Functions use `set search_path = ''`, so qualify everything (`public.outages`, `extensions.st_contains`, `auth.uid()`).
+- Boundaries are `geography(MultiPolygon, 4326)` because some municipios include islands. `ST_Contains` needs geometry, so point-in-barrio lookups cast `boundary::extensions.geometry`, which `barrios_boundary_geom_idx` matches.
+- `report_outage(lat, lng, type, water_issue)` is the only intended way to create an outage from the app. It finds or creates the active outage for that barrio and type, then records a `confirm` vote. **Raw coordinates must never be stored or logged.** Don't add location columns or put coordinates in error messages.
+- There is at most one active outage per barrio and type (a partial unique index).
+- Vote counts on `outages` are maintained by the `outage_votes_sync_counts` trigger. Never write them directly.
+- `expire_stale_outages()` runs every 15 minutes with pg_cron. It expires active outages that have had no new vote in 6 hours.
+- Every table has RLS, plus column-level grants that decide which columns clients can write. Counts, status, timestamps and `reputation_points` are server-managed. When you add a column clients should write, add it to the grants in a new migration.
+- A signup trigger on `auth.users` creates a `profiles` row (username stays null until onboarding).
 
 ## Conventions
 
