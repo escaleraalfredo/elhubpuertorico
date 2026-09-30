@@ -57,6 +57,34 @@ A mobile app built with [Expo](https://expo.dev) (SDK 57), React Native, and Typ
    After the first native build, `npm start` is enough for day-to-day JS changes.
    Web (`npm run web`) works too; the Map tab shows a placeholder there.
 
+## Database
+
+The Supabase schema lives in `supabase/migrations/` (PostGIS, municipios/barrios,
+profiles, outages, votes, comments, row level security). Apply it to your project with
+the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started):
+
+```bash
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+```
+
+To run it locally instead (requires Docker): `npx supabase start`.
+
+The migrations create empty `municipios` and `barrios` tables. Load boundary data
+(e.g. from the US Census TIGER/Line county subdivisions for Puerto Rico) before
+`report_outage` can resolve locations.
+
+Report an outage from the app with:
+
+```ts
+const { data: outage, error } = await supabase.rpc('report_outage', {
+  lat, lng, type: 'water', water_issue: 'low_pressure',
+});
+```
+
+The coordinates are only used to find the barrio and are never stored.
+
 ## Push notifications
 
 Expo push tokens require an EAS project ID. Link the project once with:
